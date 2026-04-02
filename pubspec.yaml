@@ -3,6 +3,9 @@ description: "Code generator for relax_orm — generates TableSchema from annota
 version: 0.1.0
 homepage: https://github.com/KalybosPro/relax_orm
 repository: https://github.com/KalybosPro/relax_orm
+issue_tracker: https://github.com/KalybosPro/relax_orm/issues
+documentation: https://github.com/KalybosPro/relax_orm#readme
+license: MIT
 
 topics:
   - orm
@@ -10,17 +13,24 @@ topics:
   - build-runner
 
 environment:
-  sdk: ^3.11.0
+  sdk: ">=3.11.0 <4.0.0"
+
+platforms:
+  linux:
+  macos:
+  windows:
+  web:
+  android:
+  ios:
 
 dependencies:
   build: ^2.4.0
   source_gen: ^2.0.0
   analyzer: ^7.0.0
-  relax_orm:
-    path: ../relax_orm
 
 dev_dependencies:
   build_runner: ^2.4.0
   build_test: ^2.2.0
   test: ^1.25.0
   source_gen_test: ^1.0.0
+  lints: ^2.0.0

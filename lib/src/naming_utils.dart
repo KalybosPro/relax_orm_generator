@@ -41,5 +41,5 @@ String classNameToTableName(String className) {
 String classNameToSchemaVar(String className) {
   final first = className[0].toLowerCase();
   final rest = className.substring(1);
-  return '${first}${rest}Schema';
+  return '$first${rest}Schema';
 }
