@@ -1,3 +1,9 @@
+## 0.1.2
+
+### Fixed
+
+- Fixed package publication metadata validation
+
 ## 0.1.1
 
 ### Changed

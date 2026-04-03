@@ -1,6 +1,6 @@
 name: relax_orm_generator
 description: "Code generator for relax_orm — generates TableSchema from annotated classes."
-version: 0.1.1
+version: 0.1.2
 homepage: https://github.com/KalybosPro/relax_orm
 repository: https://github.com/KalybosPro/relax_orm
 issue_tracker: https://github.com/KalybosPro/relax_orm/issues
