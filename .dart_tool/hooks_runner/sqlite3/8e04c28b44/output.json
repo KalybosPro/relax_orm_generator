@@ -2,7 +2,7 @@
   "assets": [
     {
       "encoding": {
-        "file": "D:\\src\\projects\\packages\\relax_orm_generator\\.dart_tool\\hooks_runner\\shared\\sqlite3\\build\\download-52b9cf8\\sqlite3.dll",
+        "file": "D:\\src\\projects\\packages\\relax_orm_generator\\.dart_tool\\hooks_runner\\shared\\sqlite3\\build\\download-17a1f9f0\\sqlite3.dll",
         "id": "package:sqlite3/src/ffi/libsqlite3.g.dart",
         "link_mode": {
           "type": "dynamic_loading_bundle"
@@ -13,5 +13,5 @@
   ],
   "assets_for_linking": {},
   "status": "success",
-  "timestamp": "2026-04-02 22:10:19.000"
+  "timestamp": "2026-04-03 00:21:29.000"
 }

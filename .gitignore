@@ -1,0 +1,17 @@
+# Dart/Pub
+.dart_tool/
+pubspec.lock
+/build/
+/coverage/
+**/doc/api/
+
+# IDE
+*.iml
+*.ipr
+*.iws
+.idea/
+.vscode/
+
+# Misc
+.DS_Store
+*.log
