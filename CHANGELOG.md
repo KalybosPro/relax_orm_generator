@@ -1,3 +1,9 @@
+## 0.1.3
+
+### Fixed
+
+- Fixed package repository accessibility on Github
+
 ## 0.1.2
 
 ### Fixed
