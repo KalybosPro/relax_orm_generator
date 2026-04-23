@@ -47,10 +47,10 @@ class RelaxTableGenerator extends GeneratorForAnnotation<RelaxTable> {
 
     // Resolve table name.
     final customTableName = annotation.peek('name')?.stringValue;
-    final tableName = customTableName ?? classNameToTableName(className);
+    final tableName = customTableName ?? classNameToTableName(className!);
 
     // Resolve schema variable name.
-    final schemaVar = classNameToSchemaVar(className);
+    final schemaVar = classNameToSchemaVar(className!);
 
     // Collect fields, skipping @Ignore'd ones.
     final fields = _collectFields(classElement);
@@ -136,10 +136,10 @@ class RelaxTableGenerator extends GeneratorForAnnotation<RelaxTable> {
             columnAnnotation.peek('defaultValue')?.stringValue;
       }
 
-      final columnName = customColumnName ?? toSnakeCase(field.name);
+      final columnName = customColumnName ?? toSnakeCase(field.name!);
 
       fields.add(_FieldInfo(
-        fieldName: field.name,
+        fieldName: field.name!,
         columnName: columnName,
         dartTypeName: dartTypeName,
         mapping: mapping,
@@ -161,7 +161,7 @@ class RelaxTableGenerator extends GeneratorForAnnotation<RelaxTable> {
       );
     }
 
-    final paramNames = constructor.parameters.map((p) => p.name).toSet();
+    final paramNames = constructor.formalParameters.map((p) => p.name).toSet();
     for (final field in fields) {
       if (!paramNames.contains(field.fieldName)) {
         throw InvalidGenerationSourceError(
@@ -198,7 +198,7 @@ class RelaxTableGenerator extends GeneratorForAnnotation<RelaxTable> {
   }
 
   bool _hasAnnotation(FieldElement field, String name) {
-    return field.metadata.any((m) {
+    return field.metadata.annotations.any((m) {
       final value = m.computeConstantValue();
       if (value == null) return false;
       final typeName = value.type?.getDisplayString();
@@ -207,7 +207,7 @@ class RelaxTableGenerator extends GeneratorForAnnotation<RelaxTable> {
   }
 
   ConstantReader? _getAnnotation(FieldElement field, String name) {
-    for (final meta in field.metadata) {
+    for (final meta in field.metadata.annotations) {
       final value = meta.computeConstantValue();
       if (value == null) continue;
       final typeName = value.type?.getDisplayString();

@@ -1,3 +1,7 @@
+## 0.1.5
+
+- Update dependencies
+
 ## 0.1.4
 
 - Fixed conflict of analyser's version with other packages
