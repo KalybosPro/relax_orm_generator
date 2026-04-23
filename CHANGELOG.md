@@ -1,3 +1,7 @@
+## 0.1.4
+
+- Fixed conflict of analyser's version with other packages
+
 ## 0.1.3
 
 ### Fixed
