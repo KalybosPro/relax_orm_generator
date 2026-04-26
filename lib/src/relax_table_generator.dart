@@ -2,6 +2,7 @@
 
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/nullability_suffix.dart';
+import 'package:analyzer/dart/element/type.dart';
 import 'package:build/build.dart';
 import 'package:source_gen/source_gen.dart';
 
@@ -112,47 +113,54 @@ class RelaxTableGenerator extends GeneratorForAnnotation<RelaxTable> {
       final dartType = field.type;
       final dartTypeName = dartType.getDisplayString();
       final mapping = getTypeMapping(dartTypeName);
+      final isJsonBacked = mapping == null && _isJsonSupportedType(dartType);
 
-      if (mapping == null) {
+      if (mapping == null && !isJsonBacked) {
         throw InvalidGenerationSourceError(
           'Unsupported type "$dartTypeName" on field "${field.name}" '
           'in class "${classElement.name}". '
-          'Supported types: String, int, double, bool, DateTime, Uint8List.',
+          'Supported types: String, int, double, bool, DateTime, Uint8List, '
+          'other model classes, and List<T> variants of those types.',
           element: field,
         );
       }
 
       final isPrimaryKey = _hasAnnotation(field, 'PrimaryKey');
-      final isNullable = dartType.nullabilitySuffix == NullabilitySuffix.question;
+      final isNullable =
+          dartType.nullabilitySuffix == NullabilitySuffix.question;
 
       // Check for @Column annotation for custom name / default value.
       final columnAnnotation = _getAnnotation(field, 'Column');
       String? customColumnName;
       String? defaultValue;
       if (columnAnnotation != null) {
-        customColumnName =
-            columnAnnotation.peek('name')?.stringValue;
-        defaultValue =
-            columnAnnotation.peek('defaultValue')?.stringValue;
+        customColumnName = columnAnnotation.peek('name')?.stringValue;
+        defaultValue = columnAnnotation.peek('defaultValue')?.stringValue;
       }
 
       final columnName = customColumnName ?? toSnakeCase(field.name!);
 
-      fields.add(_FieldInfo(
-        fieldName: field.name!,
-        columnName: columnName,
-        dartTypeName: dartTypeName,
-        mapping: mapping,
-        isPrimaryKey: isPrimaryKey,
-        isNullable: isNullable,
-        defaultValue: defaultValue,
-      ));
+      fields.add(
+        _FieldInfo(
+          fieldName: field.name!,
+          columnName: columnName,
+          columnConstructor: mapping?.columnConstructor ?? 'text',
+          isPrimaryKey: isPrimaryKey,
+          isNullable: isNullable,
+          defaultValue: defaultValue,
+          fromMapExpression: _buildFromMapExpression(dartType, columnName),
+          toMapExpression: _buildToMapExpression(dartType, field.name!),
+        ),
+      );
     }
 
     return fields;
   }
 
-  void _validateConstructor(ClassElement classElement, List<_FieldInfo> fields) {
+  void _validateConstructor(
+    ClassElement classElement,
+    List<_FieldInfo> fields,
+  ) {
     final constructor = classElement.unnamedConstructor;
     if (constructor == null) {
       throw InvalidGenerationSourceError(
@@ -173,9 +181,34 @@ class RelaxTableGenerator extends GeneratorForAnnotation<RelaxTable> {
     }
   }
 
+  void _validateObjectConstructor(
+    ClassElement classElement,
+    List<FieldElement> fields,
+  ) {
+    final constructor = classElement.unnamedConstructor;
+    if (constructor == null) {
+      throw InvalidGenerationSourceError(
+        'Class ${classElement.name} must have an unnamed constructor to be '
+        'used as a nested RelaxORM model.',
+        element: classElement,
+      );
+    }
+
+    final paramNames = constructor.formalParameters.map((p) => p.name).toSet();
+    for (final field in fields) {
+      if (!paramNames.contains(field.name)) {
+        throw InvalidGenerationSourceError(
+          'Constructor of ${classElement.name} is missing parameter '
+          '"${field.name}" required for nested model serialization.',
+          element: classElement,
+        );
+      }
+    }
+  }
+
   /// Generates a `ColumnDef.xxx(...)` expression.
   String _generateColumnDef(_FieldInfo field) {
-    final ctor = field.mapping.columnConstructor;
+    final ctor = field.columnConstructor;
     final parts = <String>["'${field.columnName}'"];
     if (field.isPrimaryKey) parts.add('isPrimaryKey: true');
     if (field.isNullable) parts.add('isNullable: true');
@@ -187,14 +220,196 @@ class RelaxTableGenerator extends GeneratorForAnnotation<RelaxTable> {
 
   /// Generates a `fieldName: map['column_name'] as Type` expression.
   String _generateFromMapEntry(_FieldInfo field) {
-    final castType = field.mapping.dartCastType;
-    final nullable = field.isNullable ? '?' : '';
-    return "${field.fieldName}: map['${field.columnName}'] as $castType$nullable";
+    return '${field.fieldName}: ${field.fromMapExpression}';
   }
 
   /// Generates a `'column_name': entity.fieldName` expression.
   String _generateToMapEntry(_FieldInfo field) {
-    return "'${field.columnName}': entity.${field.fieldName}";
+    return "'${field.columnName}': ${field.toMapExpression}";
+  }
+
+  String _buildFromMapExpression(DartType type, String columnName) {
+    final mapping = getTypeMapping(type.getDisplayString());
+    if (mapping != null) {
+      final nullable =
+          type.nullabilitySuffix == NullabilitySuffix.question ? '?' : '';
+      return "map['$columnName'] as ${mapping.dartCastType}$nullable";
+    }
+    return _buildDecodedValueExpression(
+      type,
+      "RelaxOrmJson.decode(map['$columnName'])",
+    );
+  }
+
+  String _buildToMapExpression(DartType type, String fieldName) {
+    final mapping = getTypeMapping(type.getDisplayString());
+    if (mapping != null) {
+      return 'entity.$fieldName';
+    }
+    return 'RelaxOrmJson.encode(${_buildEncodedValueExpression(type, 'entity.$fieldName')})';
+  }
+
+  String _buildDecodedValueExpression(DartType type, String source) {
+    final isNullable = type.nullabilitySuffix == NullabilitySuffix.question;
+    final baseType = _withoutNullability(type);
+
+    final decoded = _buildNonNullableDecodedValueExpression(baseType, source);
+    if (isNullable) {
+      return '$source == null ? null : $decoded';
+    }
+    return '($source == null ? null : $decoded)!';
+  }
+
+  String _buildNonNullableDecodedValueExpression(DartType type, String source) {
+    final typeName = type.getDisplayString();
+    final mapping = getTypeMapping(typeName);
+    if (mapping != null) {
+      switch (typeName) {
+        case 'DateTime':
+          return 'DateTime.parse($source as String)';
+        case 'Uint8List':
+          return 'RelaxOrmJson.base64ToBytes($source as String)';
+        default:
+          return '$source as ${mapping.dartCastType}';
+      }
+    }
+
+    if (type is InterfaceType &&
+        type.element.name == 'List' &&
+        type.typeArguments.length == 1) {
+      final itemType = type.typeArguments.first;
+      final itemValue = _buildDecodedValueExpression(itemType, 'item');
+      return 'RelaxOrmJson.asList($source).map((item) => $itemValue).toList()';
+    }
+
+    if (type is InterfaceType) {
+      final classElement = type.element;
+      if (classElement is! ClassElement) {
+        throw InvalidGenerationSourceError(
+          'Unsupported nested type "$typeName".',
+        );
+      }
+      final fields = _collectSerializableObjectFields(classElement);
+      _validateObjectConstructor(classElement, fields);
+
+      final buffer = StringBuffer();
+      buffer.writeln('(() {');
+      buffer.writeln('  final data = RelaxOrmJson.asMap($source);');
+      buffer.writeln('  return ${classElement.name}(');
+      for (final field in fields) {
+        final fieldType = field.type;
+        final fieldExpression = _buildDecodedValueExpression(
+          fieldType,
+          "data['${field.name}']",
+        );
+        buffer.writeln('    ${field.name}: $fieldExpression,');
+      }
+      buffer.write('  );');
+      buffer.write('})()');
+      return buffer.toString();
+    }
+
+    throw InvalidGenerationSourceError(
+      'Unsupported JSON-backed type "$typeName".',
+    );
+  }
+
+  String _buildEncodedValueExpression(DartType type, String source) {
+    final isNullable = type.nullabilitySuffix == NullabilitySuffix.question;
+    final baseType = _withoutNullability(type);
+
+    final encoded = _buildNonNullableEncodedValueExpression(baseType, source);
+    if (isNullable) {
+      return '$source == null ? null : $encoded';
+    }
+    return encoded;
+  }
+
+  String _buildNonNullableEncodedValueExpression(DartType type, String source) {
+    final typeName = type.getDisplayString();
+    final mapping = getTypeMapping(typeName);
+    if (mapping != null) {
+      switch (typeName) {
+        case 'DateTime':
+          return '$source.toIso8601String()';
+        case 'Uint8List':
+          return 'RelaxOrmJson.bytesToBase64($source)';
+        default:
+          return source;
+      }
+    }
+
+    if (type is InterfaceType &&
+        type.element.name == 'List' &&
+        type.typeArguments.length == 1) {
+      final itemType = type.typeArguments.first;
+      final itemValue = _buildEncodedValueExpression(itemType, 'item');
+      return '$source.map((item) => $itemValue).toList()';
+    }
+
+    if (type is InterfaceType) {
+      final classElement = type.element;
+      if (classElement is! ClassElement) {
+        throw InvalidGenerationSourceError(
+          'Unsupported nested type "$typeName".',
+        );
+      }
+      final fields = _collectSerializableObjectFields(classElement);
+      final entries = fields
+          .map((field) {
+            final fieldValue = _buildEncodedValueExpression(
+              field.type,
+              '$source.${field.name}',
+            );
+            return "'${field.name}': $fieldValue";
+          })
+          .join(', ');
+      return '{$entries}';
+    }
+
+    throw InvalidGenerationSourceError(
+      'Unsupported JSON-backed type "$typeName".',
+    );
+  }
+
+  bool _isJsonSupportedType(DartType type) {
+    if (getTypeMapping(type.getDisplayString()) != null) return true;
+
+    final baseType = _withoutNullability(type);
+    if (baseType is InterfaceType &&
+        baseType.element.name == 'List' &&
+        baseType.typeArguments.length == 1) {
+      return _isJsonSupportedType(baseType.typeArguments.first);
+    }
+
+    if (baseType is InterfaceType) {
+      final classElement = baseType.element;
+      if (classElement is! ClassElement) return false;
+      final fields = _collectSerializableObjectFields(classElement);
+      if (fields.isEmpty) return false;
+      return fields.every((field) => _isJsonSupportedType(field.type));
+    }
+
+    return false;
+  }
+
+  List<FieldElement> _collectSerializableObjectFields(
+    ClassElement classElement,
+  ) {
+    return classElement.fields.where((field) {
+      if (field.isStatic || field.isSynthetic) return false;
+      if (_hasAnnotation(field, 'Ignore')) return false;
+      return true;
+    }).toList();
+  }
+
+  DartType _withoutNullability(DartType type) {
+    return type is InterfaceType
+        ? type.element.instantiate(
+            typeArguments: type.typeArguments,
+            nullabilitySuffix: NullabilitySuffix.none,
+          )
+        : type;
   }
 
   bool _hasAnnotation(FieldElement field, String name) {
@@ -221,19 +436,21 @@ class RelaxTableGenerator extends GeneratorForAnnotation<RelaxTable> {
 class _FieldInfo {
   final String fieldName;
   final String columnName;
-  final String dartTypeName;
-  final TypeMapping mapping;
+  final String columnConstructor;
   final bool isPrimaryKey;
   final bool isNullable;
   final String? defaultValue;
+  final String fromMapExpression;
+  final String toMapExpression;
 
   _FieldInfo({
     required this.fieldName,
     required this.columnName,
-    required this.dartTypeName,
-    required this.mapping,
+    required this.columnConstructor,
     required this.isPrimaryKey,
     required this.isNullable,
     this.defaultValue,
+    required this.fromMapExpression,
+    required this.toMapExpression,
   });
 }

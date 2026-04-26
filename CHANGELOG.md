@@ -1,3 +1,15 @@
+## 0.1.6
+
+### Added
+
+- Added support for JSON-backed serialization of nested model objects
+- Added support for `List<T>` fields when `T` is a supported primitive or nested model type
+
+### Changed
+
+- Generator now encodes complex fields with `RelaxOrmJson.encode(...)` and decodes them with `RelaxOrmJson.decode(...)`
+- Extended generated mapping support for nested values such as `DateTime` and `Uint8List` inside JSON-backed objects and lists
+
 ## 0.1.5
 
 - Update dependencies
