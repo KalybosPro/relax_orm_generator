@@ -1,3 +1,17 @@
+> [!IMPORTANT]
+> ## 📦 This repository has moved
+> `relax_orm_generator` is now developed in the **[KalybosPro/relax-tech](https://github.com/KalybosPro/relax-tech)** monorepo, together with the rest of the Relax packages.
+>
+> - 👉 **Active source:** https://github.com/KalybosPro/relax-tech/tree/main/packages/relax_orm_generator
+> - 🐛 **Issues & Pull Requests:** please open them in the [monorepo](https://github.com/KalybosPro/relax-tech/issues) — this repo no longer tracks them.
+> - 📥 **On pub.dev:** nothing changes. `dart pub add relax_orm_generator` keeps working exactly as before.
+>
+> This repository is **archived** for historical reference and will not receive further updates.
+
+---
+
+<!-- ↓↓↓ Original README kept below for reference ↓↓↓ -->
+
 # RelaxORM Generator
 
 Code generator for [relax_orm](https://pub.dev/packages/relax_orm). Generates `TableSchema` definitions from annotated Dart classes.
